@@ -13,10 +13,20 @@ const app = express();
 
 app.use(express.json());
 app.use(express.static("public"));
-app.use(cors());
+const corsOptions ={
+    origin:'http://localhost:3000', 
+    credentials:true,            //access-control-allow-credentials:true
+    optionSuccessStatus:200
+}
+app.use(cors(corsOptions));
 
 mongoose.set('strictQuery', false);
 mongoose.connect("mongodb://localhost:27017/CanteenBuddyCopyDB");
+
+const roles = {
+    admin: 101,
+    user: 102
+};
 
 const userSchema = new Schema ({
     fname: {
@@ -33,6 +43,10 @@ const userSchema = new Schema ({
         required: true},
     orders: {
         type: []
+    },
+    refreshToken: {
+        type: String,
+        default: null
     }
 });
 
@@ -52,6 +66,10 @@ const adminSchema = new Schema({
     password: {
         type:String,
         required: true,
+    },
+    refreshToken: {
+        type: String,
+        default: null
     }
 });
 
@@ -174,21 +192,44 @@ app.post("/login", (req,res) => {
         if(foundUser){
             bcrypt.compare(req.body.password, foundUser.password).then(result => {
                 if(result){
-                    const payload = {
-                        username: foundUser.email
+                    const role = roles.user
+                    const accessToken = jwt.sign(
+                        {
+                            "UserInfo": {
+                            "id": foundUser._id,
+                            "name": foundUser.name,
+                            "email": foundUser.email,
+                            "role": role
+                            }
+                        },
+                        process.env.ACCESS_TOKEN_SECRET,
+                        { expiresIn: '10s' }
+                    );
+                    const refreshToken = jwt.sign(
+                    {
+                        "name": foundUser.name,
+                        "email": foundUser.email,
+                        "role": role
+                    },
+                    process.env.REFRESH_TOKEN_SECRET,
+                    { expiresIn: '1d' }
+                );
+                foundUser.refreshToken = refreshToken;
+                foundUser.save();
+                res.cookie(
+                    'jwt',
+                    refreshToken,
+                    {
+                    httpOnly: true,
+                    secure: true,
+                    sameSite: 'None',
+                    maxAge: 1000 * 60 * 60 * 24 * 7
                     }
-                    const tkn = jwt.sign(payload,"usertoken", {expiresIn: '60s'});
-                    const login = {
-                        name: [foundUser.fname,foundUser._id],
-                        message:"Login Successfull",
-                        token: tkn
-                    };
-                    Cart.deleteMany({});
-                    const obj = JSON.stringify(login);
-                    res.send(obj);
+                )
+                res.status(200).json({ accessToken, role, foundUser });
                 }
                 else{
-                    res.json("Wrong Password");
+                    res.json("Invalid Password");
                 }
             });
         }
@@ -265,22 +306,46 @@ app.post("/admin", (req,res) => {
         else{
             bcrypt.compare(password, admin.password).then((result)=>{
                 if(result){
-                    const payload = {
-                        username: admin.email
+                    const role = roles.admin
+                    const accessToken = jwt.sign(
+                        {
+                            "UserInfo": {
+                            "id": admin._id,
+                            "name": admin.name,
+                            "email": admin.email,
+                            "role": role
+                            }
+                        },
+                        process.env.ACCESS_TOKEN_SECRET,
+                        { expiresIn: '10s' }
+                    );
+                    const refreshToken = jwt.sign(
+                    {
+                        "name": admin.name,
+                        "email": admin.email,
+                        "role": role
+                    },
+                    process.env.REFRESH_TOKEN_SECRET,
+                    { expiresIn: '1d' }
+                );
+                admin.refreshToken = refreshToken;
+                admin.save();
+                res.cookie(
+                    'jwt',
+                    refreshToken,
+                    {
+                    httpOnly: true,
+                    secure: true,
+                    sameSite: 'None',
+                    maxAge: 1000 * 60 * 60 * 24 * 7
                     }
-                    const tkn = jwt.sign(payload,"usertoken", {expiresIn: '60s'});
-                    Canteen.findOne({canteen_name:admin.canteen_name}).then((canteen) => {
-                        const login = {
-                            name: [admin.name,admin._id, admin.canteen_name,canteen._id],
-                            message:"Login Successfull",
-                            token: tkn
-                        };
-                        const obj = JSON.stringify(login);
-                    res.send(obj);
-                    })
-                    
-                    
+                )
+                Canteen.find({canteen_name: admin.canteen_name}).then((canteen) => {
+                    if(canteen)
+                        res.status(200).json({ accessToken, role, admin, canteen });
+                })
                 }
+                
                 else{
                     res.json("Wrong Password");
                 }
@@ -437,67 +502,3 @@ app.get("/gettotal/:id",(req,res)=>{
 app.listen(8080, () => {
     console.log("server running at port 8080");
 });
-
-
-
-
-
-
-
-
-
-
-// bcrypt.hash("admin@123",saltRounds).then(hash => {
-// const admin = new Admin({
-//     email: "admin@admin.com",
-//     password: hash
-// });
-// admin.save();
-// });
-
-
-
-
-// app.post("/food",(req,res)=>{
-    //     const food = new Food({
-    //         name: req.body.name,
-    //         type: req.body.type,
-    //         category: req.body.category,
-    //         price: Number(req.body.price)
-    //     });
-    //     food.save().then((err) => {
-        //         if(err){
-            //             res.json(err)
-            //         }
-            //         else{
-                //             res.json("Food Added");
-                //         }
-                //     });
-                // });
-                
-                
-                
-                // app.get("/food",(req,res)=>{
-                    //     Food.find({}).then((result) => {
-                        //         if(result)
-                        //             res.send(result[0].fooditems);
-                        //     })
-                        // });
-                        
-                        // app.delete("/food/:name/:id",(req,res) => {
-                            //     Canteen.findByName({canteen_name:req.params.name}).then(result=>{
-//         if(result){
-//             res.send("Successful");
-//         }
-//     });
-
-
-
-    // app.get("/allorder",(req,res)=>{
-    //     Order.find({}).then((result)=>{
-    //         if(result){
-    //             res.send(result);
-    //         }
-    //     });
-    // });
-// })
