@@ -302,6 +302,10 @@ app.get("/adminprofile/:id",(req,res) => {
 app.get("/userprofile/:id",(req,res) => {
     User.find({_id:req.params.id}).then((result) => {
         if (result) {
+            // const npassword
+            const resa ={
+                name:[_id,fname,lname,email,password]}
+            const obj = JSON.stringify(resa);
             res.send(result)
         }
     })
