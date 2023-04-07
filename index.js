@@ -6,10 +6,12 @@ const { Schema } = mongoose;
 const bcrypt = require('bcrypt');
 const saltRounds = 10;
 const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
 // const token=require('crypto').randomBytes(64).toString('hex');
 // console.log(token);
 
 const app = express();
+app.use(cookieParser());
 
 app.use(express.json());
 app.use(express.static("public"));
@@ -223,7 +225,7 @@ app.post("/login", (req,res) => {
                     httpOnly: true,
                     secure: true,
                     sameSite: 'None',
-                    maxAge: 1000 * 60 * 60 * 24 * 7
+                    maxAge: 360000
                     }
                 )
                 res.status(200).json({ accessToken, role, foundUser });
@@ -498,6 +500,69 @@ app.get("/gettotal/:id",(req,res)=>{
         res.json(total);
     });
 });
+
+//Handle Refresh for User
+app.get("/refresh", async(req,res) => {
+    const cookies = req.cookies;
+    if (!cookies?.jwt) return res.sendStatus(401);
+    const refreshToken = cookies.jwt;
+    const foundUser = await User.findOne({ refreshToken }).exec();
+    if (!foundUser) return res.sendStatus(403);
+    jwt.verify(
+        refreshToken,
+        process.env.REFRESH_TOKEN_SECRET,
+        (err, decoded) => {
+        if (err || foundUser.name !== decoded.name) return res.sendStatus(403);
+        const role = roles.user
+        const accessToken = jwt.sign(
+            {
+                "UserInfo": {
+                    "id": foundUser._id,
+                    "name": foundUser.name,
+                    "email": foundUser.email,
+                    "role": role
+                    }
+            },
+            process.env.ACCESS_TOKEN_SECRET,
+            { expiresIn: '10s' }
+        );
+        res.json({ accessToken, role, foundUser })
+    }
+);
+})
+
+//Handle refresh for Admin
+app.get("/refresh1", async(req,res) => {
+    const cookies = req.cookies;
+    if (!cookies?.jwt) return res.sendStatus(401);
+    const refreshToken = cookies.jwt;
+    const admin = await Admin.findOne({ refreshToken }).exec();
+    if (!admin) return res.sendStatus(403);
+    jwt.verify(
+        refreshToken,
+        process.env.REFRESH_TOKEN_SECRET,
+        (err, decoded) => {
+        if (err || admin.name !== decoded.name) return res.sendStatus(403);
+        const role = roles.admin
+        const accessToken = jwt.sign(
+            {
+                "UserInfo": {
+                    "id": admin._id,
+                    "name": admin.name,
+                    "email": admin.email,
+                    "role": role
+                    }
+            },
+            process.env.ACCESS_TOKEN_SECRET,
+            { expiresIn: '10s' }
+        );
+        Canteen.find({canteen_name: admin.canteen_name}).then((canteen) => {
+            if(canteen)
+                res.json({ accessToken, role, admin, canteen });
+        })
+    }
+);
+})
 
 app.listen(8080, () => {
     console.log("server running at port 8080");
