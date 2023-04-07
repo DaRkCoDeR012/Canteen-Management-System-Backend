@@ -6,8 +6,6 @@ const { Schema } = mongoose;
 const bcrypt = require('bcrypt');
 const saltRounds = 10;
 const jwt = require("jsonwebtoken");
-// const token=require('crypto').randomBytes(64).toString('hex');
-// console.log(token);
 
 const app = express();
 
@@ -70,25 +68,6 @@ const adminSchema = new Schema({
     refreshToken: {
         type: String,
         default: null
-    }
-});
-
-const foodSchema = new Schema ({
-    name: {
-        type:String,
-        required:true
-    },
-    type:{
-        type:String,
-        required:true
-    },
-    category:{
-        type:String,
-        required:true
-    },
-    price:{
-        type:Number,
-        required:true
     }
 });
 
@@ -179,7 +158,6 @@ const canteenSchema = new Schema({
         }]
 })
 
-const Food = mongoose.model("food", foodSchema);
 const Admin = mongoose.model("admin",adminSchema);
 const User = mongoose.model("user", userSchema);
 const Cart = mongoose.model("Cart", cartSchema);
@@ -284,7 +262,6 @@ app.post("/adminregister", (req,res) => {
                         const canteen = new Canteen({
                             canteen_name: req.body.canteen_name,
                             name: req.body.name,
-                            // fooditems: []
                         });
                         admin.save();
                         canteen.save();
@@ -358,7 +335,18 @@ app.post("/admin", (req,res) => {
 app.get("/adminprofile/:id",(req,res) => {
     Admin.find({_id:req.params.id}).then((result) => {
         if (result) {
-            res.send(result)
+            Canteen.find({canteen_name:result[0].canteen_name}).then((newres) => {
+                var resa={
+                    a_id:result[0]._id,
+                    name:result[0].name,
+                    email:result[0].email,
+                    password:result[0].password,
+                    canteen_name:result[0].canteen_name,
+                    canteen_id:newres[0]._id,
+                }
+                const obj = JSON.stringify(resa)
+                res.send(obj)
+            })
         }
     })
 });
@@ -449,12 +437,12 @@ app.delete("/cart/:id",(req,res) => {
     });
 })
 
+//  delete cart
 app.delete("/cart",(req,res) => {
-    Cart.deleteMany({ }).then(res=>console.log(res));
+    Cart.deleteMany({ }).then(res => console.log(res))
 })
-
 // place order
-app.post("/order/:id/:name/:total/:canteen",(req,res)=>{
+app.post("/order/:id/:name/:total/:canteen/:cid",(req,res)=>{
     let currTime = new Date().toLocaleTimeString();
     const order = new Order({
         cart: req.body,
@@ -462,7 +450,8 @@ app.post("/order/:id/:name/:total/:canteen",(req,res)=>{
         userid: req.params.id,
         ordertime: currTime,
         total: Number(req.params.total),
-        canteen_name:req.params.canteen
+        canteen_name:req.params.canteen,
+        canteen_id:req.params.cid
     });
     order.save().then((result)=>{
         User.findByIdAndUpdate(req.params.id,{$push:{orders: result._id}})
@@ -474,6 +463,16 @@ app.post("/order/:id/:name/:total/:canteen",(req,res)=>{
 app.get("/order/:id",(req,res)=>{
     Order.find({userid: req.params.id}).then((result)=>{
         if(result){
+            res.send(result);
+        }
+    });
+});
+
+//  view oder by canteen
+app.get("/order/:id/:cid",(req,res)=>{
+    Order.find({userid: req.params.id,canteen_id: req.params.cid}).then((result)=>{
+        if(result){
+            // console.log(result);
             res.send(result);
         }
     });
