@@ -7,17 +7,30 @@ const bcrypt = require("bcrypt");
 const saltRounds = 10;
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
+const imageroute = require('./Routes/uploadimage');
+const multer = require('multer');
 const app = express();
 app.use(cookieParser());
 
 app.use(express.json());
-app.use(express.static("public"));
+app.use(express.static(__dirname + '/public'));
+app.use('/uploads',express.static("uploads"));
 const corsOptions = {
   origin: "http://localhost:3000",
   credentials: true, //access-control-allow-credentials:true
   optionSuccessStatus: 200,
 };
 app.use(cors(corsOptions));
+
+const Storage = multer.diskStorage({
+  destination: "./uploads",
+  filename: (req,file,cb) => {
+      const unique =  Date.now() + Math.round(Math.random() * 1E9)
+      cb(null, unique + file.originalname)
+  }
+})
+
+const upload = multer({storage: Storage})
 
 mongoose.set("strictQuery", false);
 mongoose.connect("mongodb://localhost:27017/CanteenBuddyCopyDB");
@@ -148,6 +161,9 @@ const orderSchema = new Schema({
     type: String,
     required: true,
   },
+  status: {
+    type: String
+  }
 });
 
 const canteenSchema = new Schema({
@@ -177,15 +193,20 @@ const canteenSchema = new Schema({
         type: Number,
         required: true,
       },
+      image:{
+        type: String,
+      }
     },
   ],
 });
+
 
 const Admin = mongoose.model("admin", adminSchema);
 const User = mongoose.model("user", userSchema);
 const Cart = mongoose.model("Cart", cartSchema);
 const Order = mongoose.model("Order", orderSchema);
 const Canteen = mongoose.model("Canteen", canteenSchema);
+module.exports = Canteen;
 
 // userlogin
 app.post("/login", (req, res) => {
@@ -221,9 +242,11 @@ app.post("/login", (req, res) => {
             httpOnly: true,
             secure: true,
             sameSite: "None",
-            maxAge: 360000,
+            maxAge: 1000 * 60 * 60 * 24 * 7,
           });
-          res.status(200).json({ accessToken, role, foundUser });
+          Canteen.find({}).then((canteen) => {
+            res.status(200).json({ accessToken, role, foundUser,  canteen});
+          })
         } else {
           res.json("Invalid Password");
         }
@@ -417,15 +440,18 @@ app.post("/food/:id", (req, res) => {
     type: req.body.type,
     category: req.body.category,
     price: Number(req.body.price),
+    image: req.body.image
   };
   Canteen.findByIdAndUpdate(
     { _id: req.params.id },
     { $push: { fooditems: food } }
-  ).then((err) => {
+  ).then((data,err) => {
     if (err) {
       res.json(err);
     } else {
-      res.json("Food Added");
+      Canteen.findById(req.params.id).then((canteen)=>{
+        res.json(canteen);
+      })
     }
   });
 });
@@ -438,15 +464,13 @@ app.get("/food/:name", (req, res) => {
 });
 
 // delete food
-app.delete("/food/:cid/:id", (req, res) => {
-  Canteen.findOneAndUpdate(
-    { _id: req.params.cid },
-    { $pull: { fooditems: { _id: req.params.id } } }
-  ).then((result) => {
-    if (result) {
-      res.send("Successful");
-    }
-  });
+app.delete("/food/:cid/:id", async(req, res) => {
+  const canteen = await Canteen.findById(req.params.cid)
+  canteen.fooditems = canteen.fooditems.filter(food => {
+    return food._id != req.params.id
+  })
+  const result = await canteen.save();
+  res.send(result)
 });
 
 // view cart
@@ -495,6 +519,7 @@ app.post("/order/:id/:name/:total/:canteen/:cid", (req, res) => {
     total: Number(req.params.total),
     canteen_name: req.params.canteen,
     canteen_id: req.params.cid,
+    status: "Prepairing"
   });
   order.save().then((result) => {
     User.findByIdAndUpdate(req.params.id, {
@@ -532,6 +557,15 @@ app.get("/allorder/:id", (req, res) => {
   });
 });
 
+//Order Status
+app.put("/orderstatus/:id", async(req,res) => {
+  const id = req.params.id;
+  const order = await Order.findById(id)
+  order.status = req.body.status
+  const result = await order.save()
+  res.json("Status Updated")
+})
+
 // total
 app.get("/gettotal/:id", (req, res) => {
   let total = 0;
@@ -565,7 +599,9 @@ app.get("/refresh", async (req, res) => {
       process.env.ACCESS_TOKEN_SECRET,
       { expiresIn: "10s" }
     );
-    res.json({ accessToken, role, foundUser });
+    Canteen.find({}).then((canteen)=>{
+      res.json({ accessToken, role, foundUser, canteen });
+    })
   });
 });
 
@@ -638,6 +674,19 @@ app.get("/logout1", async (req, res) => {
   res.clearCookie("jwt", { httpOnly: true, sameSite: "None", secure: true });
   res.sendStatus(204);
 });
+
+app.get('/uploadimage', async(req,res)=>{
+  res.send("Upload Image")
+})
+
+app.post('/uploadimage', async(req,res)=>{
+  res.send("Photo Uploaded");
+})
+
+app.post('/uploadimage/:cid',upload.single('testimg') , async(req,res)=>{
+  console.log(req.file.filename)
+  res.json({"imagepath": req.file.filename});
+})
 
 app.listen(8080, () => {
   console.log("server running at port 8080");
