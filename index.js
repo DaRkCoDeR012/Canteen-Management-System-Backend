@@ -318,7 +318,7 @@ app.post("/admin", (req,res) => {
                     maxAge: 1000 * 60 * 60 * 24 * 7
                     }
                 )
-                Canteen.find({canteen_name: admin.canteen_name}).then((canteen) => {
+                Canteen.findOne({canteen_name: admin.canteen_name}).then((canteen) => {
                     if(canteen)
                         res.status(200).json({ accessToken, role, admin, canteen });
                 })
@@ -334,16 +334,16 @@ app.post("/admin", (req,res) => {
 
 // admin profile
 app.get("/adminprofile/:id",(req,res) => {
-    Admin.find({_id:req.params.id}).then((result) => {
+    Admin.findOne({_id:req.params.id}).then((result) => {
         if (result) {
-            Canteen.find({canteen_name:result[0].canteen_name}).then((newres) => {
+            Canteen.findOne({canteen_name:result.canteen_name}).then((newres) => {
                 var resa={
-                    a_id:result[0]._id,
-                    name:result[0].name,
-                    email:result[0].email,
-                    password:result[0].password,
-                    canteen_name:result[0].canteen_name,
-                    canteen_id:newres[0]._id,
+                    a_id:result._id,
+                    name:result.name,
+                    email:result.email,
+                    password:result.password,
+                    canteen_name:result.canteen_name,
+                    canteen_id:newres._id,
                 }
                 const obj = JSON.stringify(resa)
                 res.send(obj)
@@ -378,22 +378,19 @@ app.post("/food/:id",(req,res)=>{
         category: req.body.category,
         price: Number(req.body.price)
     };
-    Canteen.findByIdAndUpdate({_id:req.params.id},{$push: {fooditems: food}})
-    .then((err) => {
-        if(err){
-            res.json(err)
-        }
-        else{
-            res.json("Food Added");
+    Canteen.findOneAndUpdate({_id:req.params.id},{$push: {fooditems: food}})
+    .then((result) => {
+        if(result){
+            console.log(result)
         }
     });
 });
 
 // view food
 app.get("/food/:name",(req,res)=>{
-    Canteen.find({canteen_name:req.params.name}).then((result) => {
+    Canteen.findOne({canteen_name:req.params.name}).then((result) => {
         if(result)
-            res.send(result[0].fooditems);
+            res.send(result.fooditems);
     })
 });
 
@@ -554,7 +551,7 @@ app.get("/refresh1", async(req,res) => {
             process.env.ACCESS_TOKEN_SECRET,
             { expiresIn: '10s' }
         );
-        Canteen.find({canteen_name: admin.canteen_name}).then((canteen) => {
+        Canteen.findOne({canteen_name: admin.canteen_name}).then((canteen) => {
             if(canteen)
                 res.json({ accessToken, role, admin, canteen });
         })
