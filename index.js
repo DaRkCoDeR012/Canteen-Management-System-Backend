@@ -33,7 +33,7 @@ const Storage = multer.diskStorage({
 const upload = multer({storage: Storage})
 
 mongoose.set("strictQuery", false);
-mongoose.connect("mongodb://localhost:27017/CanteenBuddyCopyDB");
+mongoose.connect("mongodb://127.0.0.1:27017/CanteenBuddyCopyDB");
 
 const roles = {
   admin: 101,
@@ -213,6 +213,7 @@ app.post("/login", (req, res) => {
   User.findOne({ email: req.body.email }).then((foundUser) => {
     if (foundUser) {
       bcrypt.compare(req.body.password, foundUser.password).then((result) => {
+        console.log(result)
         if (result) {
           const role = roles.user;
           const accessToken = jwt.sign(
@@ -315,6 +316,7 @@ app.post("/updateAdmin/:id", (req, res) => {
     if (foundAdmin) {
       bcrypt.compare(req.body.password, foundAdmin.password).then((result) => {
         if (result) {
+          console.log(result);
           bcrypt.hash(req.body.npassword, saltRounds).then((hash) => {
             hash;
             Admin.updateOne(
@@ -326,6 +328,7 @@ app.post("/updateAdmin/:id", (req, res) => {
               }
             ).then((admin) => {
               if (admin) {
+                console.log(admin);
                 res.json("Updated Successfully");
               } else {
                 res.json("User not found");
